@@ -6,43 +6,61 @@ package uk.ac.soton.ecs.team19.run2;
  */
 
 import java.util.ArrayList;
-import java.util.Map.Entry;
+import java.util.List;
+import java.util.Map;
 
+import org.openimaj.data.dataset.GroupedDataset;
 import org.openimaj.data.dataset.VFSGroupDataset;
 import org.openimaj.data.dataset.VFSListDataset;
+import org.openimaj.experiment.dataset.split.GroupedRandomSplitter;
+import org.openimaj.experiment.evaluation.classification.ClassificationEvaluator;
+import org.openimaj.experiment.evaluation.classification.ClassificationResult;
+import org.openimaj.experiment.evaluation.classification.analysers.confusionmatrix.CMAnalyser;
+import org.openimaj.experiment.evaluation.classification.analysers.confusionmatrix.CMResult;
 import org.openimaj.feature.DoubleFV;
 import org.openimaj.feature.FeatureExtractor;
+import org.openimaj.feature.SparseIntFV;
 import org.openimaj.image.DisplayUtilities;
 import org.openimaj.image.FImage;
 import org.openimaj.image.ImageUtilities;
 import org.openimaj.image.feature.local.aggregate.BagOfVisualWords;
+import org.openimaj.image.feature.local.aggregate.BlockSpatialAggregator;
+import org.openimaj.ml.annotation.linear.LiblinearAnnotator;
+import org.openimaj.ml.annotation.linear.LiblinearAnnotator.Mode;
 import org.openimaj.ml.clustering.FloatCentroidsResult;
 import org.openimaj.ml.clustering.assignment.HardAssigner;
 import org.openimaj.ml.clustering.kmeans.FloatKMeans;
 import org.openimaj.util.array.ArrayUtils;
 import org.openimaj.util.pair.IntFloatPair;
 
+import de.bwaldvogel.liblinear.SolverType;
 import gov.sandia.cognition.collection.ArrayUtil;
 
 public class Run {
 
 	public static void main(String[] args) {
 		try {
-			// VFSGroupDataset<FImage> image_dataset = new VFSGroupDataset<FImage>("/Users/mty/Downloads/training", ImageUtilities.FIMAGE_READER);
-			// Set<Entry<String, VFSListDataset<FImage>>> alldata =  image_dataset.entrySet();
-			
-			//HardAssigner<byte[], float[], IntFloatPair> assigner 
-			VFSListDataset<FImage> all_image_list = new VFSListDataset<FImage>("/Users/mty/Downloads/training", ImageUtilities.FIMAGE_READER);
-			// for (final Entry<String, VFSListDataset<FImage>> entry : image_dataset.entrySet()) {
-			// 	VFSListDataset<FImage> image_list = entry.getValue();
-			// 	for(final FImage image: image_list){
-			// 		all_image_list.add(image);
-			// 	}
-			// }
 
-			DisplayUtilities.display("test",all_image_list);
+			GroupedDataset<String,VFSListDataset<FImage>,FImage> image_dataset = new VFSGroupDataset<> ("/Users/mty/Downloads/training", ImageUtilities.FIMAGE_READER);
+			GroupedRandomSplitter<String, FImage> splits = new GroupedRandomSplitter<String,FImage>(image_dataset, 50, 0, 50);
+			VFSListDataset<FImage> all_image = new VFSListDataset<FImage>("/Users/mty/Downloads/training", ImageUtilities.FIMAGE_READER);
+
+			System.out.println("Start clustering");
+			HardAssigner<float[], float[], IntFloatPair> assigner = trainQuantiser(all_image);
+			BOVWExtractor extractor = new BOVWExtractor(assigner);
 			
-			
+			System.out.println("Start Training");
+			LiblinearAnnotator<FImage, String> ann = new LiblinearAnnotator<FImage, String>(
+				extractor, Mode.MULTICLASS, SolverType.L2R_L2LOSS_SVC, 1.0, 0.00001);
+			ann.train(splits.getTrainingDataset());
+
+			System.out.println("Start evaluating");
+			ClassificationEvaluator<CMResult<String>, String, FImage> eval = 
+			new ClassificationEvaluator<CMResult<String>, String, FImage>(ann, splits.getTestDataset(), 
+			new CMAnalyser<FImage, String>(CMAnalyser.Strategy.SINGLE));
+			Map<FImage, ClassificationResult<String>> guesses = eval.evaluate(); 
+			CMResult<String> result = eval.analyse(guesses);
+			System.out.println(result.getSummaryReport());
 		} catch (Exception e) {
 			
 		}
@@ -94,21 +112,21 @@ public class Run {
 
 
 	static class BOVWExtractor implements FeatureExtractor<DoubleFV, FImage>{
-		HardAssigner<byte[], float[], IntFloatPair> assigner;
+		HardAssigner<float[], float[], IntFloatPair> assigner;
 		
-		public BOVWExtractor(HardAssigner<byte[], float[], IntFloatPair> assigner) {
+		public BOVWExtractor(HardAssigner<float[], float[], IntFloatPair> assigner) {
 			this.assigner=assigner;
 		}
 		@Override
 		public DoubleFV extractFeature(FImage object) {
-			
-			BagOfVisualWords<byte[]> bovw = new BagOfVisualWords<byte[]>(assigner);
-			return null;
+			List<float[]> features = getPatches(object);
+			BagOfVisualWords<float[]> bovw = new BagOfVisualWords<float[]>(assigner);
+			return bovw.aggregateVectorsRaw(features).asDoubleFV();
 		}
 		
     }
 	
-	
+
 	/**
 	 * mean centring
 	 * @param patch
@@ -125,8 +143,40 @@ public class Run {
 			patch[i]= patch[i]-mean;
 		}
         return patch;
-    }
+	}
+	
+	static List<float[]> getPatches(FImage image){
+		List<float[]> featureList = new ArrayList<>();
+		for(int i = 0; i< image.getHeight();i=i+11) {
+			for(int j = 0; j< image.getWidth();j=j+11) {
+				FImage patch = image.extractROI(i, j, 8, 8);	
+				float[] vector = patch.getFloatPixelVector();
+				//mean-centering
+				vector = mean_centring(vector);
+				ArrayUtils.normalise(vector);
+				featureList.add(vector);
+			}
+		}
+		return featureList;
+	}
+
+	/**
+	 * 
+	 * @return 
+	 */
+	// static Map<String, FImage> getMapDataset(VFSGroupDataset<FImage> dataset){
+	// 	Map<String, FImage> map = new HashMap<>();
+	// 	Set<Entry<String, VFSListDataset<FImage>>> entrySet =  dataset.entrySet();
+	// 	for (final Entry<String, VFSListDataset<FImage>> entry : image_dataset.entrySet()) {
+	// 		VFSListDataset<FImage> image_list = entry.getValue();
+	// 		for(final FImage image: image_list){
+				
+	// 		}
+	// 	}
+	// 	return map;
+	// }
 	
 	
 }
+
 
