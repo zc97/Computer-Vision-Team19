@@ -111,10 +111,14 @@ public class Run
             // Resize the square to the desired tiny dimensions
             square = square.process(new ResizeProcessor(TINY_SIZE, TINY_SIZE));
 
-            // TODO Zero mean and unit length?
+            // Normalise tiny image to zero mean and unit length
+            double[] fv = ArrayUtils.reshape(ArrayUtils.convertToDouble(square.pixels));
+            double mean = ArrayUtils.sumValues(fv) / fv.length;
+        	ArrayUtils.subtract(fv, mean);
+        	ArrayUtils.divide(fv, ArrayUtils.pnorm(fv, 2));
 
             // Return the tiny image as a vector
-            return new DoubleFV(ArrayUtils.reshape(ArrayUtils.convertToDouble(square.pixels)));
+            return new DoubleFV(fv);
         }
     }
 }
