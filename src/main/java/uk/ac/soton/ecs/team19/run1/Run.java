@@ -114,8 +114,8 @@ public class Run
             // Normalise tiny image to zero mean and unit length
             double[] fv = ArrayUtils.reshape(ArrayUtils.convertToDouble(square.pixels));
             double mean = ArrayUtils.sumValues(fv) / fv.length;
-        	ArrayUtils.subtract(fv, mean);
-        	ArrayUtils.divide(fv, ArrayUtils.pnorm(fv, 2));
+            ArrayUtils.subtract(fv, mean);
+            ArrayUtils.divide(fv, ArrayUtils.pnorm(fv, 2));
 
             // Return the tiny image as a vector
             return new DoubleFV(fv);
