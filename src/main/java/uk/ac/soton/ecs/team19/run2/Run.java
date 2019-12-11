@@ -1,15 +1,20 @@
 package uk.ac.soton.ecs.team19.run2;
 
+import java.io.PrintWriter;
+
 /**
  *  You should develop a set of linear classifiers (use the LiblinearAnnotator class to automatically create 15 one-vs-all classifiers)
  *  using a bag-of-visual-words feature based on fixed size densely-sampled pixel patches.
  */
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 
 import org.openimaj.data.dataset.GroupedDataset;
+import org.openimaj.data.dataset.ListDataset;
 import org.openimaj.data.dataset.VFSGroupDataset;
 import org.openimaj.data.dataset.VFSListDataset;
 import org.openimaj.experiment.dataset.split.GroupedRandomSplitter;
@@ -25,6 +30,7 @@ import org.openimaj.image.FImage;
 import org.openimaj.image.ImageUtilities;
 import org.openimaj.image.feature.local.aggregate.BagOfVisualWords;
 import org.openimaj.image.feature.local.aggregate.BlockSpatialAggregator;
+import org.openimaj.ml.annotation.ScoredAnnotation;
 import org.openimaj.ml.annotation.linear.LiblinearAnnotator;
 import org.openimaj.ml.annotation.linear.LiblinearAnnotator.Mode;
 import org.openimaj.ml.clustering.FloatCentroidsResult;
@@ -40,13 +46,15 @@ public class Run {
 
 	public static void main(String[] args) {
 		try {
-
-			GroupedDataset<String,VFSListDataset<FImage>,FImage> image_dataset = new VFSGroupDataset<> ("/Users/mty/Downloads/training", ImageUtilities.FIMAGE_READER);
+			final String path = "/Users/mty/Downloads/training";
+			final String testingPath = "/Users/mty/Downloads/testing1";
+			GroupedDataset<String,VFSListDataset<FImage>,FImage> image_dataset = new VFSGroupDataset<> (path, ImageUtilities.FIMAGE_READER);
+			VFSListDataset<FImage> testing = new VFSListDataset<>(testingPath, ImageUtilities.FIMAGE_READER);
 			GroupedRandomSplitter<String, FImage> splits = new GroupedRandomSplitter<String,FImage>(image_dataset, 50, 0, 50);
-			VFSListDataset<FImage> all_image = new VFSListDataset<FImage>("/Users/mty/Downloads/training", ImageUtilities.FIMAGE_READER);
+			
 
 			System.out.println("Start clustering");
-			HardAssigner<float[], float[], IntFloatPair> assigner = trainQuantiser(all_image);
+			HardAssigner<float[], float[], IntFloatPair> assigner = trainQuantiser(splits.getTrainingDataset());
 			BOVWExtractor extractor = new BOVWExtractor(assigner);
 			
 			System.out.println("Start Training");
@@ -55,45 +63,57 @@ public class Run {
 			ann.train(splits.getTrainingDataset());
 
 			System.out.println("Start evaluating");
-			ClassificationEvaluator<CMResult<String>, String, FImage> eval = 
-			new ClassificationEvaluator<CMResult<String>, String, FImage>(ann, splits.getTestDataset(), 
-			new CMAnalyser<FImage, String>(CMAnalyser.Strategy.SINGLE));
-			Map<FImage, ClassificationResult<String>> guesses = eval.evaluate(); 
-			CMResult<String> result = eval.analyse(guesses);
-			System.out.println(result.getSummaryReport());
+			// ClassificationEvaluator<CMResult<String>, String, FImage> eval = 
+			// new ClassificationEvaluator<CMResult<String>, String, FImage>(ann, splits.getTestDataset(), 
+			// new CMAnalyser<FImage, String>(CMAnalyser.Strategy.SINGLE));
+			// Map<FImage, ClassificationResult<String>> guesses = eval.evaluate(); 
+			// CMResult<String> result = eval.analyse(guesses);
+			// System.out.println(result.getSummaryReport());
+			
+			PrintWriter pw = new PrintWriter("run2.txt");
+			for(int i = 0; i<testing.size();i++){
+				ScoredAnnotation<String> guess = Collections.max(ann.annotate(testing.get(i)));
+				pw.println(testing.getID(i)+" "+ guess.annotation);
+				pw.flush();
+			}
+
 		} catch (Exception e) {
 			
 		}
 	}
 	
-	static HardAssigner<float[], float[], IntFloatPair> trainQuantiser(VFSListDataset<FImage> sample){
+	static HardAssigner<float[], float[], IntFloatPair> trainQuantiser(GroupedDataset<String,ListDataset<FImage>,FImage> sample){
 		ArrayList<float[]> patch_array= new ArrayList<>();
-		for (FImage image : sample) { 
-			//more patches
-			/*
-			for(int i =0; i<image.getHeight();i=i+3) {
-				for(int j = 0; j<image.getWidth(); j=j+3) {
-					FImage out = image.extractROI(i, j, 8, 8);
-					float[] vector = patch.getFloatPixelVector();
-					//mean-centering
-					vector = mean_centring(vector);
-					ArrayUtils.normalise(vector);
-					patch_array.add(vector);
-					
+
+		for (final Entry<String, ListDataset<FImage>> entry : sample.entrySet()) {
+			for (FImage image : entry.getValue()) { 
+				//more patches
+				/*
+				for(int i =0; i<image.getHeight();i=i+3) {
+					for(int j = 0; j<image.getWidth(); j=j+3) {
+						FImage out = image.extractROI(i, j, 8, 8);
+						float[] vector = patch.getFloatPixelVector();
+						//mean-centering
+						vector = mean_centring(vector);
+						ArrayUtils.normalise(vector);
+						patch_array.add(vector);
+						
+					}
 				}
-			}
-			*/
-			
-			//less patches
-			for(int i = 0; i< image.getHeight();i=i+11) {
-				for(int j = 0; j< image.getWidth();j=j+11) {
-					FImage patch = image.extractROI(i, j, 8, 8);	
-					float[] vector = patch.getFloatPixelVector();
-					//mean-centering
-					vector = mean_centring(vector);
-					ArrayUtils.normalise(vector);
-					patch_array.add(vector);
+				*/
+				
+				//less patches
+				for(int i = 0; i< image.getHeight();i=i+11) {
+					for(int j = 0; j< image.getWidth();j=j+11) {
+						FImage patch = image.extractROI(i, j, 8, 8);	
+						float[] vector = patch.getFloatPixelVector();
+						//mean-centering
+						vector = mean_centring(vector);
+						ArrayUtils.normalise(vector);
+						patch_array.add(vector);
+					}
 				}
+
 			}
 
 		}
@@ -158,25 +178,7 @@ public class Run {
 			}
 		}
 		return featureList;
-	}
-
-	/**
-	 * 
-	 * @return 
-	 */
-	// static Map<String, FImage> getMapDataset(VFSGroupDataset<FImage> dataset){
-	// 	Map<String, FImage> map = new HashMap<>();
-	// 	Set<Entry<String, VFSListDataset<FImage>>> entrySet =  dataset.entrySet();
-	// 	for (final Entry<String, VFSListDataset<FImage>> entry : image_dataset.entrySet()) {
-	// 		VFSListDataset<FImage> image_list = entry.getValue();
-	// 		for(final FImage image: image_list){
-				
-	// 		}
-	// 	}
-	// 	return map;
-	// }
-	
-	
+	}	
 }
 
 
