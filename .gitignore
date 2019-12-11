@@ -16,3 +16,7 @@ buildNumber.properties
 
 # OS generated files #
 .DS_Store
+
+# Coursework
+training/
+testing/

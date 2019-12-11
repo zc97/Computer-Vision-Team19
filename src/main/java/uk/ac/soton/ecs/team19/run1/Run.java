@@ -12,6 +12,7 @@ import org.openimaj.feature.DoubleFV;
 import org.openimaj.image.processing.resize.ResizeProcessor;
 import org.openimaj.util.array.ArrayUtils;
 
+// Testing and evaluation
 import org.openimaj.ml.annotation.ScoredAnnotation;
 import java.util.Collections;
 
@@ -26,14 +27,6 @@ import java.util.Collections;
  * the optimal k-value for the classifier.
  */
 
-/*
- * This code appears to work.
- *
- * I have not worked out what k value is good.
- *
- * I have not implemented the zero mean and unit length part.
- */
-
 public class Run
 {
     // Tiny image side length
@@ -42,7 +35,7 @@ public class Run
     // TODO write comment and pick optimal k-value
     private static final int K = 10;
 
-    // TODO write comment
+    // Train and test
     public static void main(String[] args)
     {
         try
