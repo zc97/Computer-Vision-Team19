@@ -47,7 +47,7 @@ public class Run {
 	public static void main(String[] args) {
 		try {
 			final String path = "/Users/mty/Downloads/training";
-			final String testingPath = "/Users/mty/Downloads/testing1";
+			final String testingPath = "/Users/mty/Downloads/testing";
 			GroupedDataset<String,VFSListDataset<FImage>,FImage> image_dataset = new VFSGroupDataset<> (path, ImageUtilities.FIMAGE_READER);
 			VFSListDataset<FImage> testing = new VFSListDataset<>(testingPath, ImageUtilities.FIMAGE_READER);
 			GroupedRandomSplitter<String, FImage> splits = new GroupedRandomSplitter<String,FImage>(image_dataset, 50, 0, 50);
@@ -68,7 +68,7 @@ public class Run {
 			// new CMAnalyser<FImage, String>(CMAnalyser.Strategy.SINGLE));
 			// Map<FImage, ClassificationResult<String>> guesses = eval.evaluate(); 
 			// CMResult<String> result = eval.analyse(guesses);
-			// System.out.println(result.getSummaryReport());
+			//System.out.println(result.getSummaryReport());
 			
 			PrintWriter pw = new PrintWriter("run2.txt");
 			for(int i = 0; i<testing.size();i++){
@@ -76,7 +76,6 @@ public class Run {
 				pw.println(testing.getID(i)+" "+ guess.annotation);
 				pw.flush();
 			}
-
 		} catch (Exception e) {
 			
 		}
@@ -178,7 +177,8 @@ public class Run {
 			}
 		}
 		return featureList;
-	}	
+	}
+	
 }
 
 
