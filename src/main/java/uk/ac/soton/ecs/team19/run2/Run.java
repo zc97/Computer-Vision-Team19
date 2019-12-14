@@ -1,7 +1,6 @@
 package uk.ac.soton.ecs.team19.run2;
 
-import java.io.IOException;
-import java.io.PrintWriter;
+
 
 /**
  *  You should develop a set of linear classifiers (use the LiblinearAnnotator class to automatically create 15 one-vs-all classifiers)
@@ -13,6 +12,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.io.PrintWriter;
 
 import org.openimaj.data.dataset.GroupedDataset;
 import org.openimaj.data.dataset.ListDataset;
@@ -47,20 +47,23 @@ public class Run {
 
 	public static void main(String[] args) {
 		try {
-			final String path = "/Users/Zc/Downloads/training";
-			final String testingPath = "/Users/Zc/Downloads/testing";
-			GroupedDataset<String,VFSListDataset<FImage>,FImage> image_dataset = new VFSGroupDataset<> (path, ImageUtilities.FIMAGE_READER);
-			VFSListDataset<FImage> testing = new VFSListDataset<>(testingPath, ImageUtilities.FIMAGE_READER);
-			GroupedRandomSplitter<String, FImage> splits = new GroupedRandomSplitter<String,FImage>(image_dataset, 50, 0, 50);
-			
+			// Load the datasets
+			final String path = "/Users/Zc/Downloads/";
+			GroupedDataset<String,VFSListDataset<FImage>,FImage> image_dataset =
+				new VFSGroupDataset<> (path + "training", ImageUtilities.FIMAGE_READER);
+			VFSListDataset<FImage> testing =
+				new VFSListDataset<>(path + "testing", ImageUtilities.FIMAGE_READER);
 
-			int patchWidth = 8;
-			int patchHight = 8;
+			// Split the training dataset into two equal halves for validation
+			GroupedRandomSplitter<String, FImage> splits = new GroupedRandomSplitter<String,FImage>(image_dataset, 50, 0, 50);
+
+			int patchSize = 8;
 			int step = 20;
+
 			System.out.println("Start clustering");
-			HardAssigner<float[], float[], IntFloatPair> assigner = trainQuantiser(splits.getTrainingDataset(),  patchWidth, patchHight, step);
-			BOVWExtractor extractor = new BOVWExtractor(assigner, patchWidth, patchHight, step);
-			
+			HardAssigner<float[], float[], IntFloatPair> assigner = trainQuantiser(splits.getTrainingDataset(),  patchSize, patchSize, step);
+			BOVWExtractor extractor = new BOVWExtractor(assigner, patchSize, patchSize, step);
+
 			System.out.println("Start Training");
 			LiblinearAnnotator<FImage, String> ann = new LiblinearAnnotator<FImage, String>(
 				extractor, Mode.MULTICLASS, SolverType.L2R_L2LOSS_SVC, 1.0, 0.00001);
@@ -70,19 +73,20 @@ public class Run {
 			Evaluator eval = new Evaluator(ann, splits.getTestDataset());
 			eval.printSummary();
 			eval.writeToFile("run2.txt", testing);
-			
+
 
 		} catch (Exception e) {
-			
+			// Display error information
+            e.printStackTrace();
 		}
 	}
-	
-	static HardAssigner<float[], float[], IntFloatPair> trainQuantiser(GroupedDataset<String,ListDataset<FImage>,FImage> sample, int width, int hight, int step){
+
+	static HardAssigner<float[], float[], IntFloatPair> trainQuantiser(GroupedDataset<String,ListDataset<FImage>,FImage> sample, int width, int height, int step){
 		ArrayList<float[]> patch_array= new ArrayList<>();
 
 		for (final Entry<String, ListDataset<FImage>> entry : sample.entrySet()) {
 			for (FImage image : entry.getValue()) {
-				patch_array.addAll(getPatches(image, width, hight, step));
+				patch_array.addAll(getPatches(image, width, height, step));
 			}
 
 		}
@@ -95,15 +99,15 @@ public class Run {
 		FloatKMeans km = FloatKMeans.createKDTreeEnsemble(500);
 		FloatCentroidsResult result = km.cluster(allpatches);
 
-		return result.defaultHardAssigner(); 
+		return result.defaultHardAssigner();
 	}
 
 
-	static List<float[]> getPatches(FImage image, int width, int hight, int step){
+	static List<float[]> getPatches(FImage image, int width, int height, int step){
 		ArrayList<float[]> patches = new ArrayList<>();
 		for(int i = 0; i< image.getHeight();i=i+step) {
 			for(int j = 0; j< image.getWidth();j=j+step) {
-				FImage patch = image.extractROI(i, j, width, hight);
+				FImage patch = image.extractROI(i, j, width, height);
 				float[] vector = patch.getFloatPixelVector();
 				//mean-centering
 				vector = mean_centring(vector);
@@ -114,7 +118,7 @@ public class Run {
 		}
 		return patches;
 	}
-	
+
 
 	/**
 	 * mean centring
@@ -136,17 +140,17 @@ public class Run {
 
 	static class BOVWExtractor implements FeatureExtractor<DoubleFV, FImage>{
 		HardAssigner<float[], float[], IntFloatPair> assigner;
-		int width, hight, step;
+		int width, height, step;
 
-		public BOVWExtractor(HardAssigner<float[], float[], IntFloatPair> assigner, int width, int hight, int step) {
+		public BOVWExtractor(HardAssigner<float[], float[], IntFloatPair> assigner, int width, int height, int step) {
 			this.assigner=assigner;
 			this.width=width;
-			this.hight=hight;
+			this.height=height;
 			this.step=step;
 		}
 		@Override
 		public DoubleFV extractFeature(FImage object) {
-			List<float[]> features = getPatches(object, width, hight, step);
+			List<float[]> features = getPatches(object, width, height, step);
 			BagOfVisualWords<float[]> bovw = new BagOfVisualWords<float[]>(assigner);
 			return bovw.aggregateVectorsRaw(features).asDoubleFV();
 		}
@@ -170,7 +174,7 @@ public class Run {
 			System.out.println(result.getSummaryReport());
 		}
 
-		public void writeToFile(String fileName, VFSListDataset<FImage> testing) throws IOException {
+		public void writeToFile(String fileName, VFSListDataset<FImage> testing) throws Exception {
 			PrintWriter pw = new PrintWriter(fileName);
 			for(int i = 0; i<testing.size();i++){
 				ScoredAnnotation<String> guess = Collections.max(ann.annotate(testing.get(i)));
@@ -179,8 +183,4 @@ public class Run {
 			}
 		}
 	}
-
-	
 }
-
-

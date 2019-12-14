@@ -15,6 +15,7 @@ import org.openimaj.util.array.ArrayUtils;
 // Testing and evaluation
 import org.openimaj.ml.annotation.ScoredAnnotation;
 import java.util.Collections;
+import java.io.PrintWriter;
 
 /**
  * You should develop a simple k-nearest-neighbour classifier using the
@@ -59,13 +60,18 @@ public class Run
             // false .. Output results for training set
             if (true)
             {
+                // Output to a text file
+                PrintWriter writer = new PrintWriter("run1.txt", "UTF-8");
+
                 // Iterate over testing images
                 for (int i = 0; i < testing.size(); i++)
                 {
                     // Print the filename and best guess
                     ScoredAnnotation<String> guess = Collections.max(annotator.annotate(testing.get(i)));
-                    System.out.println(testing.getID(i) + " = " + guess.annotation);
+                    writer.println(testing.getID(i) + " " + guess.annotation);
                 }
+
+                writer.close();
             }
             else
             {
