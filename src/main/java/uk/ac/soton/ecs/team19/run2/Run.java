@@ -1,5 +1,6 @@
 package uk.ac.soton.ecs.team19.run2;
 
+import java.io.IOException;
 import java.io.PrintWriter;
 
 /**
@@ -46,16 +47,19 @@ public class Run {
 
 	public static void main(String[] args) {
 		try {
-			final String path = "/Users/mty/Downloads/training";
-			final String testingPath = "/Users/mty/Downloads/testing";
+			final String path = "/Users/Zc/Downloads/training";
+			final String testingPath = "/Users/Zc/Downloads/testing";
 			GroupedDataset<String,VFSListDataset<FImage>,FImage> image_dataset = new VFSGroupDataset<> (path, ImageUtilities.FIMAGE_READER);
 			VFSListDataset<FImage> testing = new VFSListDataset<>(testingPath, ImageUtilities.FIMAGE_READER);
 			GroupedRandomSplitter<String, FImage> splits = new GroupedRandomSplitter<String,FImage>(image_dataset, 50, 0, 50);
 			
 
+			int patchWidth = 8;
+			int patchHight = 8;
+			int step = 20;
 			System.out.println("Start clustering");
-			HardAssigner<float[], float[], IntFloatPair> assigner = trainQuantiser(splits.getTrainingDataset());
-			BOVWExtractor extractor = new BOVWExtractor(assigner);
+			HardAssigner<float[], float[], IntFloatPair> assigner = trainQuantiser(splits.getTrainingDataset(),  patchWidth, patchHight, step);
+			BOVWExtractor extractor = new BOVWExtractor(assigner, patchWidth, patchHight, step);
 			
 			System.out.println("Start Training");
 			LiblinearAnnotator<FImage, String> ann = new LiblinearAnnotator<FImage, String>(
@@ -63,56 +67,22 @@ public class Run {
 			ann.train(splits.getTrainingDataset());
 
 			System.out.println("Start evaluating");
-			// ClassificationEvaluator<CMResult<String>, String, FImage> eval = 
-			// new ClassificationEvaluator<CMResult<String>, String, FImage>(ann, splits.getTestDataset(), 
-			// new CMAnalyser<FImage, String>(CMAnalyser.Strategy.SINGLE));
-			// Map<FImage, ClassificationResult<String>> guesses = eval.evaluate(); 
-			// CMResult<String> result = eval.analyse(guesses);
-			//System.out.println(result.getSummaryReport());
+			Evaluator eval = new Evaluator(ann, splits.getTestDataset());
+			eval.printSummary();
+			eval.writeToFile("run2.txt", testing);
 			
-			PrintWriter pw = new PrintWriter("run2.txt");
-			for(int i = 0; i<testing.size();i++){
-				ScoredAnnotation<String> guess = Collections.max(ann.annotate(testing.get(i)));
-				pw.println(testing.getID(i)+" "+ guess.annotation);
-				pw.flush();
-			}
+
 		} catch (Exception e) {
 			
 		}
 	}
 	
-	static HardAssigner<float[], float[], IntFloatPair> trainQuantiser(GroupedDataset<String,ListDataset<FImage>,FImage> sample){
+	static HardAssigner<float[], float[], IntFloatPair> trainQuantiser(GroupedDataset<String,ListDataset<FImage>,FImage> sample, int width, int hight, int step){
 		ArrayList<float[]> patch_array= new ArrayList<>();
 
 		for (final Entry<String, ListDataset<FImage>> entry : sample.entrySet()) {
-			for (FImage image : entry.getValue()) { 
-				//more patches
-				/*
-				for(int i =0; i<image.getHeight();i=i+3) {
-					for(int j = 0; j<image.getWidth(); j=j+3) {
-						FImage out = image.extractROI(i, j, 8, 8);
-						float[] vector = patch.getFloatPixelVector();
-						//mean-centering
-						vector = mean_centring(vector);
-						ArrayUtils.normalise(vector);
-						patch_array.add(vector);
-						
-					}
-				}
-				*/
-				
-				//less patches
-				for(int i = 0; i< image.getHeight();i=i+11) {
-					for(int j = 0; j< image.getWidth();j=j+11) {
-						FImage patch = image.extractROI(i, j, 8, 8);	
-						float[] vector = patch.getFloatPixelVector();
-						//mean-centering
-						vector = mean_centring(vector);
-						ArrayUtils.normalise(vector);
-						patch_array.add(vector);
-					}
-				}
-
+			for (FImage image : entry.getValue()) {
+				patch_array.addAll(getPatches(image, width, hight, step));
 			}
 
 		}
@@ -127,23 +97,23 @@ public class Run {
 
 		return result.defaultHardAssigner(); 
 	}
-	
 
 
-	static class BOVWExtractor implements FeatureExtractor<DoubleFV, FImage>{
-		HardAssigner<float[], float[], IntFloatPair> assigner;
-		
-		public BOVWExtractor(HardAssigner<float[], float[], IntFloatPair> assigner) {
-			this.assigner=assigner;
+	static List<float[]> getPatches(FImage image, int width, int hight, int step){
+		ArrayList<float[]> patches = new ArrayList<>();
+		for(int i = 0; i< image.getHeight();i=i+step) {
+			for(int j = 0; j< image.getWidth();j=j+step) {
+				FImage patch = image.extractROI(i, j, width, hight);
+				float[] vector = patch.getFloatPixelVector();
+				//mean-centering
+				vector = mean_centring(vector);
+				//normalising
+				ArrayUtils.normalise(vector);
+				patches.add(vector);
+			}
 		}
-		@Override
-		public DoubleFV extractFeature(FImage object) {
-			List<float[]> features = getPatches(object);
-			BagOfVisualWords<float[]> bovw = new BagOfVisualWords<float[]>(assigner);
-			return bovw.aggregateVectorsRaw(features).asDoubleFV();
-		}
-		
-    }
+		return patches;
+	}
 	
 
 	/**
@@ -163,21 +133,53 @@ public class Run {
 		}
         return patch;
 	}
-	
-	static List<float[]> getPatches(FImage image){
-		List<float[]> featureList = new ArrayList<>();
-		for(int i = 0; i< image.getHeight();i=i+11) {
-			for(int j = 0; j< image.getWidth();j=j+11) {
-				FImage patch = image.extractROI(i, j, 8, 8);	
-				float[] vector = patch.getFloatPixelVector();
-				//mean-centering
-				vector = mean_centring(vector);
-				ArrayUtils.normalise(vector);
-				featureList.add(vector);
+
+	static class BOVWExtractor implements FeatureExtractor<DoubleFV, FImage>{
+		HardAssigner<float[], float[], IntFloatPair> assigner;
+		int width, hight, step;
+
+		public BOVWExtractor(HardAssigner<float[], float[], IntFloatPair> assigner, int width, int hight, int step) {
+			this.assigner=assigner;
+			this.width=width;
+			this.hight=hight;
+			this.step=step;
+		}
+		@Override
+		public DoubleFV extractFeature(FImage object) {
+			List<float[]> features = getPatches(object, width, hight, step);
+			BagOfVisualWords<float[]> bovw = new BagOfVisualWords<float[]>(assigner);
+			return bovw.aggregateVectorsRaw(features).asDoubleFV();
+		}
+
+	}
+
+	static class Evaluator{
+		ClassificationEvaluator<CMResult<String>, String, FImage> eval;
+		LiblinearAnnotator<FImage, String> ann;
+
+    	public Evaluator(LiblinearAnnotator<FImage, String> ann, GroupedDataset<String, ListDataset<FImage>, FImage> testDataset){
+			ClassificationEvaluator<CMResult<String>, String, FImage> eval =
+					new ClassificationEvaluator<CMResult<String>, String, FImage>(ann, testDataset,  new CMAnalyser<FImage, String>(CMAnalyser.Strategy.SINGLE));
+			this.eval = eval;
+			this.ann = ann;
+		}
+
+		public void printSummary(){
+			Map<FImage, ClassificationResult<String>> guesses = eval.evaluate();
+			CMResult<String> result = eval.analyse(guesses);
+			System.out.println(result.getSummaryReport());
+		}
+
+		public void writeToFile(String fileName, VFSListDataset<FImage> testing) throws IOException {
+			PrintWriter pw = new PrintWriter(fileName);
+			for(int i = 0; i<testing.size();i++){
+				ScoredAnnotation<String> guess = Collections.max(ann.annotate(testing.get(i)));
+				pw.println(testing.getID(i)+" "+ guess.annotation);
+				pw.flush();
 			}
 		}
-		return featureList;
 	}
+
 	
 }
 
