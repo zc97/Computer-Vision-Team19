@@ -13,6 +13,7 @@ import org.openimaj.image.processing.resize.ResizeProcessor;
 import org.openimaj.util.array.ArrayUtils;
 
 // Testing and evaluation
+import org.openimaj.experiment.dataset.split.GroupedRandomSplitter;
 import org.openimaj.ml.annotation.ScoredAnnotation;
 import java.util.Collections;
 import java.io.PrintWriter;
@@ -33,8 +34,12 @@ public class Run
     // Tiny image side length
     private static final int TINY_SIZE = 16;
 
-    // TODO write comment and pick optimal k-value
-    private static final int K = 10;
+    /*
+     * We found 15 to be the optimal k value after trying all k values 1-40
+     * 7 times for 4 different training split sizes. ALl values 14-18
+     * performed significantly better than the remaining values.
+     */
+    private static final int K = 15;
 
     // Train and test
     public static void main(String[] args)
@@ -48,18 +53,20 @@ public class Run
             VFSListDataset<FImage> testing =
                 new VFSListDataset<>(path + "testing", ImageUtilities.FIMAGE_READER);
 
-            // Create feature extractor and annotator
+            // Create feature extractor
             FeatureExtractor<DoubleFV, FImage> extractor = new TinyExtractor();
-            KNNAnnotator<FImage, String, DoubleFV> annotator =
-                new KNNAnnotator<>(extractor, DoubleFVComparison.EUCLIDEAN, K);
-
-            // Train
-            annotator.train(training);
 
             // true ... Output predictions for testing set
-            // false .. Output results for training set
+            // false .. Output results for validation set to find the best k-value
             if (true)
             {
+                // Create the annotator using the optimal k-value
+                KNNAnnotator<FImage, String, DoubleFV> annotator =
+                    new KNNAnnotator<>(extractor, DoubleFVComparison.EUCLIDEAN, K);
+
+                // Train using all training images
+                annotator.train(training);
+
                 // Output to a text file
                 PrintWriter writer = new PrintWriter("run1.txt", "UTF-8");
 
@@ -75,20 +82,48 @@ public class Run
             }
             else
             {
-                // Reuse training images for evaluation
-                int correct = 0;
-                int total = 0;
-                for (String group : training.getGroups())
+                // Use different split sizes
+                for (int p = 80; p < 100; p += 5)
                 {
-                    for (FImage image : training.get(group))
+                    System.out.printf("\n\n%d percent\n", p);
+
+                    // Get 7 different results to reduce uncertainty
+                    for (int i = 0; i < 7; i++)
                     {
-                        ScoredAnnotation<String> guess = Collections.max(annotator.annotate(image));
-                        // System.out.println(group + " = " + guess.annotation);
-                        total++;
-                        if (group.equals(guess.annotation)) correct++;
+                        System.out.println();
+
+                        // Split the training dataset into training and validation subsets
+                        GroupedRandomSplitter<String, FImage> splits = new GroupedRandomSplitter<String,FImage>(training, p, 0, 100 - p);
+
+                        // Iterate over k-values
+                        for (int k = 1; k <= 40; k++)
+                        {
+                            System.out.printf("K = %d\n", k);
+
+                            // Create an annotator using the k-value to be tested
+                            KNNAnnotator<FImage, String, DoubleFV> annotator =
+                                new KNNAnnotator<>(extractor, DoubleFVComparison.EUCLIDEAN, k);
+
+                            // Train using the training subset
+                            annotator.train(splits.getTrainingDataset());
+
+                            // Test using the validation subset
+                            int correct = 0;
+                            int total = 0;
+                            for (String group : splits.getTestDataset().getGroups())
+                            {
+                                for (FImage image : splits.getTestDataset().get(group))
+                                {
+                                    ScoredAnnotation<String> guess = Collections.max(annotator.annotate(image));
+                                    // System.out.println(group + " = " + guess.annotation);
+                                    total++;
+                                    if (group.equals(guess.annotation)) correct++;
+                                }
+                            }
+                            System.out.printf("%d / %d correct\n", correct, total);
+                        }
                     }
                 }
-                System.out.printf("%d / %d correct\n", correct, total);
             }
         }
         catch (Exception e)
@@ -113,10 +148,10 @@ public class Run
             // Normalise tiny image to zero mean and unit length
             double[] fv = ArrayUtils.reshape(ArrayUtils.convertToDouble(square.pixels));
             double[] clonefv = fv.clone();
-            
+
             double mean = ArrayUtils.sumValues(fv) / fv.length;
             double sd = Math.sqrt((ArrayUtils.sumValuesSquared(ArrayUtils.subtract(clonefv, mean)) / clonefv.length));
-            
+
             ArrayUtils.subtract(fv, mean);
             ArrayUtils.divide(fv, sd);
 
