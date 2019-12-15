@@ -50,7 +50,7 @@ public class Run {
 			// Load the datasets
 			final String path = "/Users/Zc/Downloads/";
 			GroupedDataset<String,VFSListDataset<FImage>,FImage> image_dataset =
-				new VFSGroupDataset<> (path + "training", ImageUtilities.FIMAGE_READER);
+				new VFSGroupDataset<>(path + "training", ImageUtilities.FIMAGE_READER);
 			VFSListDataset<FImage> testing =
 				new VFSListDataset<>(path + "testing", ImageUtilities.FIMAGE_READER);
 
@@ -61,7 +61,7 @@ public class Run {
 			int step = 20;
 
 			System.out.println("Start clustering");
-			HardAssigner<float[], float[], IntFloatPair> assigner = trainQuantiser(splits.getTrainingDataset(),  patchSize, patchSize, step);
+			HardAssigner<float[], float[], IntFloatPair> assigner = trainQuantiser(splits.getTrainingDataset(), patchSize, patchSize, step);
 			BOVWExtractor extractor = new BOVWExtractor(assigner, patchSize, patchSize, step);
 
 			System.out.println("Start Training");
@@ -81,7 +81,7 @@ public class Run {
 		}
 	}
 
-	static HardAssigner<float[], float[], IntFloatPair> trainQuantiser(GroupedDataset<String,ListDataset<FImage>,FImage> sample, int width, int height, int step){
+	static HardAssigner<float[], float[], IntFloatPair> trainQuantiser(GroupedDataset<String,ListDataset<FImage>,FImage> sample, int width, int height, int step) {
 		ArrayList<float[]> patch_array= new ArrayList<>();
 
 		for (final Entry<String, ListDataset<FImage>> entry : sample.entrySet()) {
@@ -91,7 +91,7 @@ public class Run {
 
 		}
 		float[][] allpatches = new float[patch_array.size()][];
-		for(int i = 0; i<patch_array.size();i++){
+		for (int i = 0; i<patch_array.size();i++) {
 			float[] row = patch_array.get(i);
 			allpatches[i]= row;
 		}
@@ -103,10 +103,10 @@ public class Run {
 	}
 
 
-	static List<float[]> getPatches(FImage image, int width, int height, int step){
+	static List<float[]> getPatches(FImage image, int width, int height, int step) {
 		ArrayList<float[]> patches = new ArrayList<>();
-		for(int i = 0; i< image.getHeight();i=i+step) {
-			for(int j = 0; j< image.getWidth();j=j+step) {
+		for (int i = 0; i< image.getHeight();i=i+step) {
+			for (int j = 0; j< image.getWidth();j=j+step) {
 				FImage patch = image.extractROI(i, j, width, height);
 				float[] vector = patch.getFloatPixelVector();
 				//mean-centering
@@ -125,20 +125,20 @@ public class Run {
 	 * @param patch
 	 * @return float[][]
 	 */
-    static float[] mean_centring(float[] patch){
+    static float[] mean_centring(float[] patch) {
 		float sum =0;
-		for(int i = 0;i<patch.length;i++){
+		for (int i = 0;i<patch.length;i++) {
 			sum = sum + patch[i];
 		}
 		float mean = sum/patch.length;
 
-		for(int i = 0; i<patch.length;i++){
+		for (int i = 0; i<patch.length;i++) {
 			patch[i]= patch[i]-mean;
 		}
         return patch;
 	}
 
-	static class BOVWExtractor implements FeatureExtractor<DoubleFV, FImage>{
+	static class BOVWExtractor implements FeatureExtractor<DoubleFV, FImage> {
 		HardAssigner<float[], float[], IntFloatPair> assigner;
 		int width, height, step;
 
@@ -157,18 +157,18 @@ public class Run {
 
 	}
 
-	static class Evaluator{
+	static class Evaluator {
 		ClassificationEvaluator<CMResult<String>, String, FImage> eval;
 		LiblinearAnnotator<FImage, String> ann;
 
-    	public Evaluator(LiblinearAnnotator<FImage, String> ann, GroupedDataset<String, ListDataset<FImage>, FImage> testDataset){
+    	public Evaluator(LiblinearAnnotator<FImage, String> ann, GroupedDataset<String, ListDataset<FImage>, FImage> testDataset) {
 			ClassificationEvaluator<CMResult<String>, String, FImage> eval =
 					new ClassificationEvaluator<CMResult<String>, String, FImage>(ann, testDataset,  new CMAnalyser<FImage, String>(CMAnalyser.Strategy.SINGLE));
 			this.eval = eval;
 			this.ann = ann;
 		}
 
-		public void printSummary(){
+		public void printSummary() {
 			Map<FImage, ClassificationResult<String>> guesses = eval.evaluate();
 			CMResult<String> result = eval.analyse(guesses);
 			System.out.println(result.getSummaryReport());
@@ -176,7 +176,7 @@ public class Run {
 
 		public void writeToFile(String fileName, VFSListDataset<FImage> testing) throws Exception {
 			PrintWriter pw = new PrintWriter(fileName);
-			for(int i = 0; i<testing.size();i++){
+			for (int i = 0; i<testing.size();i++) {
 				ScoredAnnotation<String> guess = Collections.max(ann.annotate(testing.get(i)));
 				pw.println(testing.getID(i)+" "+ guess.annotation);
 				pw.flush();
