@@ -1,5 +1,6 @@
 from imageai.Prediction.Custom import ModelTraining
 
+# Train using the images found in the data subdirectory
 trainer = ModelTraining()
 trainer.setModelTypeAsResNet()
 trainer.setDataDirectory("data")
