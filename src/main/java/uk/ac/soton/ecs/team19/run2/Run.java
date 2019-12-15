@@ -47,42 +47,57 @@ public class Run {
 
 	public static void main(String[] args) {
 		try {
+
+			//load datasets
 			final String path = "/Users/Zc/Downloads/training";
 			final String testingPath = "/Users/Zc/Downloads/testing";
 			GroupedDataset<String,VFSListDataset<FImage>,FImage> image_dataset = new VFSGroupDataset<> (path, ImageUtilities.FIMAGE_READER);
 			VFSListDataset<FImage> testing = new VFSListDataset<>(testingPath, ImageUtilities.FIMAGE_READER);
 			GroupedRandomSplitter<String, FImage> splits = new GroupedRandomSplitter<String,FImage>(image_dataset, 50, 0, 50);
-			
 
-			int patchWidth = 8;
-			int patchHight = 8;
+			//set the patch size and step
+			int patchWidth = 16;
+			int patchHeight = 16;
 			int step = 20;
+
+			//get features patches from every training images and Clustering them
 			System.out.println("Start clustering");
-			HardAssigner<float[], float[], IntFloatPair> assigner = trainQuantiser(splits.getTrainingDataset(),  patchWidth, patchHight, step);
-			BOVWExtractor extractor = new BOVWExtractor(assigner, patchWidth, patchHight, step);
-			
+			HardAssigner<float[], float[], IntFloatPair> assigner = trainQuantiser(splits.getTrainingDataset(),  patchWidth, patchHeight, step);
+
+			//generate a extractor for extracting features from images
+			BOVWExtractor extractor = new BOVWExtractor(assigner, patchWidth, patchHeight, step);
+
+			//training the one-vs-all Linear Annotator
 			System.out.println("Start Training");
 			LiblinearAnnotator<FImage, String> ann = new LiblinearAnnotator<FImage, String>(
 				extractor, Mode.MULTICLASS, SolverType.L2R_L2LOSS_SVC, 1.0, 0.00001);
 			ann.train(splits.getTrainingDataset());
 
+			//evaluating accuracy and output run2.txt
 			System.out.println("Start evaluating");
 			Evaluator eval = new Evaluator(ann, splits.getTestDataset());
 			eval.printSummary();
 			eval.writeToFile("run2.txt", testing);
-			
 
 		} catch (Exception e) {
 			
 		}
 	}
-	
-	static HardAssigner<float[], float[], IntFloatPair> trainQuantiser(GroupedDataset<String,ListDataset<FImage>,FImage> sample, int width, int hight, int step){
+
+	/**
+	 * use patches to train cluster
+	 * @param data training data
+	 * @param width patch width
+	 * @param height patch height
+	 * @param step step size of cropping
+	 * @return
+	 */
+	static HardAssigner<float[], float[], IntFloatPair> trainQuantiser(GroupedDataset<String,ListDataset<FImage>,FImage> data, int width, int height, int step){
 		ArrayList<float[]> patch_array= new ArrayList<>();
 
-		for (final Entry<String, ListDataset<FImage>> entry : sample.entrySet()) {
+		for (final Entry<String, ListDataset<FImage>> entry : data.entrySet()) {
 			for (FImage image : entry.getValue()) {
-				patch_array.addAll(getPatches(image, width, hight, step));
+				patch_array.addAll(getPatches(image, width, height, step));
 			}
 
 		}
@@ -98,12 +113,19 @@ public class Run {
 		return result.defaultHardAssigner(); 
 	}
 
-
-	static List<float[]> getPatches(FImage image, int width, int hight, int step){
+	/**
+	 * get list of patches from image
+	 * @param image target object
+	 * @param width patch width
+	 * @param height patch height
+	 * @param step step size of cropping
+	 * @return
+	 */
+	static List<float[]> getPatches(FImage image, int width, int height, int step){
 		ArrayList<float[]> patches = new ArrayList<>();
 		for(int i = 0; i< image.getHeight();i=i+step) {
 			for(int j = 0; j< image.getWidth();j=j+step) {
-				FImage patch = image.extractROI(i, j, width, hight);
+				FImage patch = image.extractROI(i, j, width, height);
 				float[] vector = patch.getFloatPixelVector();
 				//mean-centering
 				vector = mean_centring(vector);
@@ -134,25 +156,28 @@ public class Run {
         return patch;
 	}
 
+
+	//Feature Extractor
 	static class BOVWExtractor implements FeatureExtractor<DoubleFV, FImage>{
 		HardAssigner<float[], float[], IntFloatPair> assigner;
-		int width, hight, step;
+		int width, height, step;
 
-		public BOVWExtractor(HardAssigner<float[], float[], IntFloatPair> assigner, int width, int hight, int step) {
+		public BOVWExtractor(HardAssigner<float[], float[], IntFloatPair> assigner, int width, int height, int step) {
 			this.assigner=assigner;
 			this.width=width;
-			this.hight=hight;
+			this.height=height;
 			this.step=step;
 		}
 		@Override
 		public DoubleFV extractFeature(FImage object) {
-			List<float[]> features = getPatches(object, width, hight, step);
+			List<float[]> features = getPatches(object, width, height, step);
 			BagOfVisualWords<float[]> bovw = new BagOfVisualWords<float[]>(assigner);
 			return bovw.aggregateVectorsRaw(features).asDoubleFV();
 		}
 
 	}
 
+	//Evaluator
 	static class Evaluator{
 		ClassificationEvaluator<CMResult<String>, String, FImage> eval;
 		LiblinearAnnotator<FImage, String> ann;
