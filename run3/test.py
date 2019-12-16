@@ -3,7 +3,7 @@ import os
 
 # Load the model to use for prediction
 predictor = CustomImagePrediction()
-predictor.setModelPath(model_path="model_ex-031_acc-0.999333.h5")
+predictor.setModelPath(model_path="model_ex-035_acc-0.874667.h5")
 predictor.setJsonPath(model_json="model_class.json")
 predictor.loadFullModel(num_objects=5)
 

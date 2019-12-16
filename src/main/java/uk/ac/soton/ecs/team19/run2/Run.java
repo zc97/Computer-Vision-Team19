@@ -57,23 +57,28 @@ public class Run {
 			// Split the training dataset into two equal halves for validation
 			GroupedRandomSplitter<String, FImage> splits = new GroupedRandomSplitter<String,FImage>(image_dataset, 50, 0, 50);
 
+			// Set the patch size and step
 			int patchSize = 8;
 			int step = 20;
 
+			// Get features patches from every training image
 			System.out.println("Start clustering");
 			HardAssigner<float[], float[], IntFloatPair> assigner = trainQuantiser(splits.getTrainingDataset(), patchSize, patchSize, step);
+
+			// Generate an extractor for fetching features from images
 			BOVWExtractor extractor = new BOVWExtractor(assigner, patchSize, patchSize, step);
 
+			// Train the one-vs-all Linear Annotator
 			System.out.println("Start Training");
 			LiblinearAnnotator<FImage, String> ann = new LiblinearAnnotator<FImage, String>(
 				extractor, Mode.MULTICLASS, SolverType.L2R_L2LOSS_SVC, 1.0, 0.00001);
 			ann.train(splits.getTrainingDataset());
 
+			// Evaluate accuracy and output to run2.txt
 			System.out.println("Start evaluating");
 			Evaluator eval = new Evaluator(ann, splits.getTestDataset());
 			eval.printSummary();
 			eval.writeToFile("run2.txt", testing);
-
 
 		} catch (Exception e) {
 			// Display error information
@@ -81,6 +86,14 @@ public class Run {
 		}
 	}
 
+	/**
+	 * Use patches to train cluster
+	 * @param data training data
+	 * @param width patch width
+	 * @param height patch height
+	 * @param step step size of cropping
+	 * @return
+	 */
 	static HardAssigner<float[], float[], IntFloatPair> trainQuantiser(GroupedDataset<String,ListDataset<FImage>,FImage> sample, int width, int height, int step) {
 		ArrayList<float[]> patch_array= new ArrayList<>();
 
@@ -88,31 +101,38 @@ public class Run {
 			for (FImage image : entry.getValue()) {
 				patch_array.addAll(getPatches(image, width, height, step));
 			}
-
 		}
 		float[][] allpatches = new float[patch_array.size()][];
-		for (int i = 0; i<patch_array.size();i++) {
+		for (int i = 0; i < patch_array.size(); i++) {
 			float[] row = patch_array.get(i);
-			allpatches[i]= row;
+			allpatches[i] = row;
 		}
 
 		FloatKMeans km = FloatKMeans.createKDTreeEnsemble(500);
 		FloatCentroidsResult result = km.cluster(allpatches);
-
 		return result.defaultHardAssigner();
 	}
 
-
+	/**
+	 * Get list of patches from image
+	 * @param image target object
+	 * @param width patch width
+	 * @param height patch height
+	 * @param step step size of cropping
+	 * @return
+	 */
 	static List<float[]> getPatches(FImage image, int width, int height, int step) {
 		ArrayList<float[]> patches = new ArrayList<>();
-		for (int i = 0; i< image.getHeight();i=i+step) {
-			for (int j = 0; j< image.getWidth();j=j+step) {
+		for (int i = 0; i < image.getHeight(); i += step) {
+			for (int j = 0; j < image.getWidth(); j += step) {
 				FImage patch = image.extractROI(i, j, width, height);
 				float[] vector = patch.getFloatPixelVector();
-				//mean-centering
+
+				// Mean-centering
 				vector = mean_centring(vector);
-				//normalising
+				// Normalising
 				ArrayUtils.normalise(vector);
+
 				patches.add(vector);
 			}
 		}
@@ -121,19 +141,19 @@ public class Run {
 
 
 	/**
-	 * mean centring
+	 * Mean centring
 	 * @param patch
 	 * @return float[][]
 	 */
     static float[] mean_centring(float[] patch) {
-		float sum =0;
-		for (int i = 0;i<patch.length;i++) {
-			sum = sum + patch[i];
+		float sum = 0;
+		for (int i = 0; i < patch.length; i++) {
+			sum += patch[i];
 		}
-		float mean = sum/patch.length;
+		float mean = sum / patch.length;
 
-		for (int i = 0; i<patch.length;i++) {
-			patch[i]= patch[i]-mean;
+		for (int i = 0; i < patch.length ; i++) {
+			patch[i] -= mean;
 		}
         return patch;
 	}
@@ -143,10 +163,10 @@ public class Run {
 		int width, height, step;
 
 		public BOVWExtractor(HardAssigner<float[], float[], IntFloatPair> assigner, int width, int height, int step) {
-			this.assigner=assigner;
-			this.width=width;
-			this.height=height;
-			this.step=step;
+			this.assigner = assigner;
+			this.width = width;
+			this.height = height;
+			this.step = step;
 		}
 		@Override
 		public DoubleFV extractFeature(FImage object) {
@@ -176,9 +196,9 @@ public class Run {
 
 		public void writeToFile(String fileName, VFSListDataset<FImage> testing) throws Exception {
 			PrintWriter pw = new PrintWriter(fileName);
-			for (int i = 0; i<testing.size();i++) {
+			for (int i = 0; i < testing.size(); i++) {
 				ScoredAnnotation<String> guess = Collections.max(ann.annotate(testing.get(i)));
-				pw.println(testing.getID(i)+" "+ guess.annotation);
+				pw.println(testing.getID(i) + " " + guess.annotation);
 				pw.flush();
 			}
 		}
