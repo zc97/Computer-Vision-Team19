@@ -1,7 +1,5 @@
 package uk.ac.soton.ecs.team19.run2;
 
-
-
 /**
  *  You should develop a set of linear classifiers (use the LiblinearAnnotator class to automatically create 15 one-vs-all classifiers)
  *  using a bag-of-visual-words feature based on fixed size densely-sampled pixel patches.
@@ -44,7 +42,6 @@ import de.bwaldvogel.liblinear.SolverType;
 import gov.sandia.cognition.collection.ArrayUtil;
 
 public class Run {
-
 	public static void main(String[] args) {
 		try {
 			// Load the datasets
@@ -94,10 +91,10 @@ public class Run {
 	 * @param step step size of cropping
 	 * @return
 	 */
-	static HardAssigner<float[], float[], IntFloatPair> trainQuantiser(GroupedDataset<String,ListDataset<FImage>,FImage> sample, int width, int height, int step) {
+	static HardAssigner<float[], float[], IntFloatPair> trainQuantiser(GroupedDataset<String,ListDataset<FImage>,FImage> data, int width, int height, int step) {
 		ArrayList<float[]> patch_array= new ArrayList<>();
 
-		for (final Entry<String, ListDataset<FImage>> entry : sample.entrySet()) {
+		for (final Entry<String, ListDataset<FImage>> entry : data.entrySet()) {
 			for (FImage image : entry.getValue()) {
 				patch_array.addAll(getPatches(image, width, height, step));
 			}
