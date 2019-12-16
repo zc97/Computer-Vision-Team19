@@ -63,8 +63,8 @@ public class Run {
 			GroupedRandomSplitter<String, FImage> splits = new GroupedRandomSplitter<String,FImage>(image_dataset, 50, 0, 50);
 
 			// Set the patch size and step
-			int patchSize = 8;
-			int step = 20;
+			int patchSize = 10;
+			int step = 8;
 
 			// Get features patches from every training image
 			System.out.println("Start clustering");
