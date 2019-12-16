@@ -1,10 +1,5 @@
 package uk.ac.soton.ecs.team19.run2;
 
-/**
- *  You should develop a set of linear classifiers (use the LiblinearAnnotator class to automatically create 15 one-vs-all classifiers)
- *  using a bag-of-visual-words feature based on fixed size densely-sampled pixel patches.
- */
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -40,6 +35,19 @@ import org.openimaj.util.pair.IntFloatPair;
 
 import de.bwaldvogel.liblinear.SolverType;
 import gov.sandia.cognition.collection.ArrayUtil;
+
+/**
+ * You should develop a set of linear classifiers (use the LiblinearAnnotator
+ * class to automatically create 15 one-vs-all classifiers) using a
+ * bag-of-visual-words feature based on fixed size densely-sampled pixel
+ * patches. We recommend that you start with 8x8 patches, sampled every 4
+ * pixels in the x and y directions. A sample of these should be clustered
+ * using K-Means to learn a vocabulary (try ~500 clusters to start). You might
+ * want to consider mean-centring and normalising each patch before
+ * clustering/quantisation. Note: we’re not asking you to use SIFT features
+ * here - just take the pixels from the patches and flatten them into a vector
+ * & then use vector quantisation to map each patch to a visual word.
+ */
 
 public class Run {
 	public static void main(String[] args) {
@@ -91,10 +99,10 @@ public class Run {
 	 * @param step step size of cropping
 	 * @return
 	 */
-	static HardAssigner<float[], float[], IntFloatPair> trainQuantiser(GroupedDataset<String,ListDataset<FImage>,FImage> data, int width, int height, int step) {
+	static HardAssigner<float[], float[], IntFloatPair> trainQuantiser(GroupedDataset<String,ListDataset<FImage>,FImage> sample, int width, int height, int step) {
 		ArrayList<float[]> patch_array= new ArrayList<>();
 
-		for (final Entry<String, ListDataset<FImage>> entry : data.entrySet()) {
+		for (final Entry<String, ListDataset<FImage>> entry : sample.entrySet()) {
 			for (FImage image : entry.getValue()) {
 				patch_array.addAll(getPatches(image, width, height, step));
 			}
@@ -180,7 +188,7 @@ public class Run {
 
     	public Evaluator(LiblinearAnnotator<FImage, String> ann, GroupedDataset<String, ListDataset<FImage>, FImage> testDataset) {
 			ClassificationEvaluator<CMResult<String>, String, FImage> eval =
-					new ClassificationEvaluator<CMResult<String>, String, FImage>(ann, testDataset,  new CMAnalyser<FImage, String>(CMAnalyser.Strategy.SINGLE));
+				new ClassificationEvaluator<CMResult<String>, String, FImage>(ann, testDataset,  new CMAnalyser<FImage, String>(CMAnalyser.Strategy.SINGLE));
 			this.eval = eval;
 			this.ann = ann;
 		}
